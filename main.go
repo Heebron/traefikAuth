@@ -6,12 +6,15 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"gopkg.in/yaml.v3"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
+	"math"
+	net2 "net"
 	"net/http"
 	"os"
 	"path"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -21,29 +24,25 @@ var (
 
 	extractor     = regexp.MustCompile(`Subject="CN=(.*)";Issuer="O=(.*)"`)
 	currentPolicy *policy
+	cidrSet       []net2.IPNet
+	cacheSize     int
 )
-
-type configuration struct {
-	SourceCidr []string            `yaml:"source cidr"`
-	Org        map[string][]string `yaml:"org"`
-	ListenPort int                 `yaml:"listen port"`
-	BindAddr   string              `yaml:"bind addr"`
-	CacheSize  int                 `yaml:"cache size"`
-}
 
 // see https://doc.traefik.io/traefik/middlewares/http/forwardauth/
 // https://community.traefik.io/t/how-to-implement-a-forwardauth-service-with-traefik2/3392
 func main() {
-	port := flag.Int("port", 7980, "upon which TCP port to listen")
-	bind := flag.String("bind", "0.0.0.0", "upon which IP address to listen")
-	cfgFile := flag.String("config", path.Join(os.Getenv("HOME"), ".traeficForwardAuthConfig.yaml"),
-		"configuration file")
+	var err error
+
 	policyFile := flag.String("policy", path.Join(os.Getenv("HOME"), ".traeficForwardAuthPolicy.yaml"),
 		"policyMap file")
 	vFlag := flag.Bool("version", false, "show the version and quit")
-	certFile := flag.String("cert", "", "PEM encoded server cert file")
-	keyFile := flag.String("key", "", "PEM encoded unencrypted key file for cert")
-	caCerts := flag.String("cacerts", "", "PEM encoded set of trusted issuer certs to add to platform truststore")
+	cacheSizeFlag := flag.Int("cacheSize", 53, "identity decision working set size")
+	listenPort := flag.Int("listenPort", 7980, "upon which TCP/IP port to listen for traefik connections")
+	bindAddr := flag.String("bindAddr", "0.0.0.0", "which network device to bind")
+	cidrsFlag := flag.String("cidrs", "", "incoming connections must come from within this list of comma separated CIDRs")
+	certFile := flag.String("certFile", "", "pem encoded file containing a X.509 server certificate")
+	keyFile := flag.String("keyFile", "", "pem encoded file containing an unencrypted X.509 certificate key")
+	caFile := flag.String("caFile", "", "pem encoded file containing X.509 trusted issuer certificates to add to platform truststore")
 	flag.Parse()
 
 	if *vFlag {
@@ -56,54 +55,54 @@ func main() {
 	log.Printf("date built %s", buildStamp)
 	log.Printf("git hash %s", gitHash)
 
-	confFile, err := os.Open(*cfgFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	decoder := yaml.NewDecoder(confFile)
-	config := configuration{}
-	err = decoder.Decode(&config)
-
-	if err != nil {
-		log.Printf("could not read configuration file: %s", err.Error())
-	}
-
 	var tlsConfig *tls.Config
 	if *keyFile != "" && *certFile != "" {
-		if tlsConfig, err = initTLS(*certFile, *keyFile, *caCerts); err != nil {
+		if tlsConfig, err = initTLS(*certFile, *keyFile, *caFile); err != nil {
 			log.Printf("could not set up TLS: %s", err.Error())
 			return
 		}
 	}
 
+	// set up CIDR filter
+	if *cidrsFlag != "" {
+		list := strings.Split(*cidrsFlag, ",")
+		for _, i := range list {
+			if _, cidr, err := net2.ParseCIDR(i); err != nil {
+				log.Printf("can't process CIDR '%s: %s", i, err.Error())
+				return
+			} else {
+				cidrSet = append(cidrSet, *cidr)
+			}
+		}
+	}
+
+	// adjust cache size
+	cacheSize = int(math.Min(53, math.Max(200000, float64(*cacheSizeFlag))))
+	if cacheSize != *cacheSizeFlag {
+		log.Printf("cache size adjusted to %d", cacheSize)
+	}
+
 	// load policy
-	currentPolicy = processPolicyFile(*policyFile, config.CacheSize)
+	currentPolicy = processPolicyFile(*policyFile)
 	if currentPolicy.err != nil {
 		log.Printf("can't process policy file '%s: %s", *policyFile, currentPolicy.err.Error())
 		return
 	}
+	opsPolicyLoads.Inc()
 
+	// register file change listener
 	changeListener := make(chan *policy)
-	go policyFileWatcher(*policyFile, config.CacheSize, changeListener)
+	go policyFileWatcher(*policyFile, changeListener)
 	go handlePolicyChanges(changeListener)
 
-	if *port != 0 && *port != config.ListenPort {
-		log.Printf("configured listen port %d overridden by command line to %d", config.ListenPort, *port)
-		config.ListenPort = *port
-	}
-
-	if *bind != "" && *bind != config.BindAddr {
-		log.Printf("configured bind address %s overridden by command line to %s", config.BindAddr, *bind)
-		config.BindAddr = *bind
-	}
-
 	// Start server on port specified above
-	bindSpec := fmt.Sprintf("%s:%d", config.BindAddr, config.ListenPort)
+	bindSpec := fmt.Sprintf("%s:%d", *bindAddr, *listenPort)
 	log.Printf("server is listening on '%s'", bindSpec)
 
 	mux := http.ServeMux{}
-	mux.HandleFunc("/", requestHandler)
+	mux.HandleFunc("/", filterByCIDR_func(requestHandler))
+	mux.Handle("/metrics", filterByCIDR_Handler(promhttp.Handler()))
+
 	srv := &http.Server{
 		Addr:      bindSpec,
 		Handler:   &mux,
@@ -127,6 +126,7 @@ func handlePolicyChanges(updates chan *policy) {
 				if bytes.Compare(e.hash, currentPolicy.hash) != 0 {
 					currentPolicy = e // I assume this is atomic
 					log.Print("new policy received and cache flushed")
+					opsPolicyLoads.Inc()
 				}
 			}
 		}

@@ -3,16 +3,23 @@ package main
 import (
 	"fmt"
 	"log"
+	net2 "net"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 func requestHandler(w http.ResponseWriter, r *http.Request) {
-
 	proto, ok := r.Header["X-Forwarded-Proto"]
 
 	if !ok || proto[0] != "https" {
 		http.Error(w, "not a TLS connection", http.StatusBadRequest)
+		return
+	}
+
+	serviceName, ok := r.Header["X-Forwarded-Host"] // actual destination
+	if !ok {
+		http.Error(w, "missing service name (Host header) info", http.StatusBadRequest)
 		return
 	}
 
@@ -40,13 +47,47 @@ func requestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// current policy is dynamically updated
-	if currentPolicy.isAuthorized(m[2], m[1]) {
-		//if verboseFlag {
-		//	log.Printf("accepted %s from %s", unescaped, r.Host)
-		//}
+	if currentPolicy.isAuthorized(m[2], m[1], serviceName[0]) {
+		opsAllowed.Inc()
 		return
 	}
 
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
-	//log.Printf("rejected %s from %s", unescaped, r.Host)
+	opsDenied.Inc()
+}
+
+func filterByCIDR_func(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		opsRequests.Inc()
+		ip := net2.ParseIP(r.RemoteAddr[0:strings.Index(r.RemoteAddr, ":")])
+
+		for _, i := range cidrSet {
+			if i.Contains(ip) {
+				next(w, r)
+				return
+			}
+		}
+
+		http.Error(w, "unauthorized - source IP not in configured CIDR", http.StatusUnauthorized)
+		log.Printf("unauthorized source address %s", ip.String())
+		opsUnauthSource.Inc()
+	}
+}
+
+func filterByCIDR_Handler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		opsRequests.Inc()
+		ip := net2.ParseIP(r.RemoteAddr[0:strings.Index(r.RemoteAddr, ":")])
+
+		for _, i := range cidrSet {
+			if i.Contains(ip) {
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		http.Error(w, "unauthorized - source IP not in configured CIDR", http.StatusUnauthorized)
+		log.Printf("unauthorized source address %s", ip.String())
+		opsUnauthSource.Inc()
+	})
 }

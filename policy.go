@@ -13,13 +13,15 @@ import (
 )
 
 type policyMap []struct {
-	O  string   `yaml:"o"`
-	CN []string `yaml:"cn"`
+	ServiceName string   `yaml:"service name"`
+	O           string   `yaml:"o"`
+	CN          []string `yaml:"cn"`
 }
 
 type compEntry struct {
-	o  *regexp.Regexp
-	cn []*regexp.Regexp
+	serviceName *regexp.Regexp
+	o           *regexp.Regexp
+	cn          []*regexp.Regexp
 }
 
 type policy struct {
@@ -31,7 +33,7 @@ type policy struct {
 	comparators []compEntry
 }
 
-func policyFileWatcher(f string, cacheSize int, c chan<- *policy) {
+func policyFileWatcher(f string, c chan<- *policy) {
 	// set up the policyMap file watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -51,14 +53,14 @@ func policyFileWatcher(f string, cacheSize int, c chan<- *policy) {
 		// now listen for file changes
 		select {
 		case _ = <-watcher.Events: // wait for file event.
-			c <- processPolicyFile(f, cacheSize)
+			c <- processPolicyFile(f)
 		case err := <-watcher.Errors:
 			c <- &policy{err: err}
 		}
 	}
 }
 
-func processPolicyFile(f string, cacheSize int) *policy {
+func processPolicyFile(f string) *policy {
 	if p, err := loadPolicy(f); err != nil {
 		return &policy{err: err}
 	} else {
@@ -67,6 +69,7 @@ func processPolicyFile(f string, cacheSize int) *policy {
 			return newPolicy // return on error
 		} else if newLRU, err := lru2.NewWithEvict[string, bool](cacheSize, func(k string, v bool) {
 			log.Printf("key %s evicted from cache", k)
+			opsCacheEvictions.Inc()
 		}); err != nil {
 			return &policy{err: err}
 		} else {
@@ -102,6 +105,13 @@ func compilePolicy(p policyMap) *policy {
 			continue
 		}
 
+		// compile the service matcher
+		serviceNameCompiled, err := regexp.Compile(value.ServiceName)
+		if err != nil {
+			return &policy{err: errors.New(fmt.Sprintf("policy entry %d: service name=%s could not be compiled: %s", i+1, value.ServiceName, err.Error()))}
+		}
+		h.Write([]byte(value.ServiceName))
+
 		// compile the org matcher
 		oCompiled, err := regexp.Compile(value.O)
 		if err != nil {
@@ -109,7 +119,7 @@ func compilePolicy(p policyMap) *policy {
 		}
 		h.Write([]byte(value.O))
 
-		newEntry := compEntry{o: oCompiled}
+		newEntry := compEntry{o: oCompiled, serviceName: serviceNameCompiled}
 
 		// iterate over the CN list and compile
 		for _, j := range value.CN {
@@ -131,29 +141,28 @@ func compilePolicy(p policyMap) *policy {
 // isAuthorized returns true if the individual is authorized otherwise false. There is a race condition where the same
 // positive or negative entry may be injected into the cache multiple times. This is OK and does not compromise the
 // validity of the algorithm. The cost to remove this race is responsiveness so not worth implementing.
-func (p *policy) isAuthorized(o, cn string) bool {
-	key := o + "|" + cn
+func (p *policy) isAuthorized(o, cn, serviceName string) bool {
+	key := serviceName + "|" + o + "|" + cn
 
-	isAllowed, exists := p.cache.Get(key) // this is single threaded (mutex)
-
-	if exists { // already in cache
-		return isAllowed
+	if isAllowed, exists := p.cache.Get(key); exists {
+		return isAllowed // already in cache
 	}
 
 	// run through policy looking for matches
 	for _, v := range p.comparators {
-		if v.o.MatchString(o) { // 'O=' match
+		if v.serviceName.MatchString(serviceName) && v.o.MatchString(o) { // 'service name' && 'o' match
 			for _, cnMatcher := range v.cn {
-				if cnMatcher.MatchString(cn) { // the 'CN=' match
-					p.cache.Add(key, true) // could look it up again here, but not worth it - ok to add duplicates
-					log.Printf("o=%s cn=%s added to allow cache", o, cn)
+				if cnMatcher.MatchString(cn) { // the 'cn' match
+					// could look it up again, in case added by other thread, but not worth it - ok to add duplicates
+					p.cache.Add(key, true)
+					log.Printf("service name=%s o=%s cn=%s added to allow cache", serviceName, o, cn)
 					return true
 				}
 			}
 		}
 	}
-	p.cache.Add(key, false) // this is single threaded (mutex)
-	log.Printf("o=%s cn=%s added to deny cache", o, cn)
+	p.cache.Add(key, false)
+	log.Printf("service name=%s o=%s cn=%s added to deny cache", serviceName, o, cn)
 
 	return false // finish
 }

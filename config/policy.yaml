@@ -1,5 +1,6 @@
 # file is processed in order
 # Ken & Marcy
-- o: '^Pratt$'
+- service name: '.*\.thepratts\.info$'
+  o: '^Pratt$'
   cn:
-    - 'Ken|Marcy Pratt'
+    - '^Ken|Marcy Pratt$'
