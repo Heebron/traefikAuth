@@ -1,4 +1,0 @@
-source cidr: [10.0.0.0/8]
-listen port: 7980
-bind addr: 0.0.0.0
-cache size: 2

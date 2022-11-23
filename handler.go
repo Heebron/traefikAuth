@@ -69,17 +69,7 @@ func isInCidrSet(ipPort string) bool {
 	return false
 }
 
-func filterByCIDRFunc(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if isInCidrSet(r.RemoteAddr) {
-			next(w, r)
-			return
-		}
-		http.Error(w, "unauthorized - source IP not in configured CIDR", http.StatusUnauthorized)
-	}
-}
-
-func filterByCIDRHandler(next http.Handler) http.Handler {
+func cidrFilter(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isInCidrSet(r.RemoteAddr) {
 			next.ServeHTTP(w, r)

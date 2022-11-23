@@ -99,16 +99,15 @@ func main() {
 	bindSpec := fmt.Sprintf("%s:%d", *bindAddr, *listenPort)
 	log.Printf("server is listening on '%s'", bindSpec)
 
+	// set up routes
 	mux := http.ServeMux{}
-	mux.HandleFunc("/", filterByCIDRFunc(requestHandler))
-	mux.Handle("/metrics", filterByCIDRHandler(promhttp.Handler()))
+	mux.Handle("/", cidrFilter(http.HandlerFunc(requestHandler)))
+	mux.Handle("/metrics", cidrFilter(promhttp.Handler()))
 
-	srv := &http.Server{
-		Addr:      bindSpec,
-		Handler:   &mux,
-		TLSConfig: tlsConfig,
-	}
+	// set up server
+	srv := &http.Server{Addr: bindSpec, Handler: &mux, TLSConfig: tlsConfig}
 
+	// get'er going
 	if tlsConfig != nil {
 		log.Print(srv.ListenAndServeTLS("", ""))
 	} else {
