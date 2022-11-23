@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"flag"
 	"fmt"
 	"gopkg.in/yaml.v3"
@@ -38,7 +40,10 @@ func main() {
 		"configuration file")
 	policyFile := flag.String("policy", path.Join(os.Getenv("HOME"), ".traeficForwardAuthPolicy.yaml"),
 		"policyMap file")
-	vFlag := flag.Bool("version", false, "show the version")
+	vFlag := flag.Bool("version", false, "show the version and quit")
+	certFile := flag.String("cert", "", "PEM encoded server cert file")
+	keyFile := flag.String("key", "", "PEM encoded unencrypted key file for cert")
+	caCerts := flag.String("cacerts", "", "PEM encoded set of trusted issuer certs to add to platform truststore")
 	flag.Parse()
 
 	if *vFlag {
@@ -61,7 +66,15 @@ func main() {
 	err = decoder.Decode(&config)
 
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("could not read configuration file: %s", err.Error())
+	}
+
+	var tlsConfig *tls.Config
+	if *keyFile != "" && *certFile != "" {
+		if tlsConfig, err = initTLS(*certFile, *keyFile, *caCerts); err != nil {
+			log.Printf("could not set up TLS: %s", err.Error())
+			return
+		}
 	}
 
 	// load policy
@@ -85,17 +98,27 @@ func main() {
 		config.BindAddr = *bind
 	}
 
-	// register the policy handler
-	http.HandleFunc("/", myApp)
-
 	// Start server on port specified above
 	bindSpec := fmt.Sprintf("%s:%d", config.BindAddr, config.ListenPort)
 	log.Printf("server is listening on '%s'", bindSpec)
-	log.Print(http.ListenAndServe(bindSpec, nil))
+
+	mux := http.ServeMux{}
+	mux.HandleFunc("/", requestHandler)
+	srv := &http.Server{
+		Addr:      bindSpec,
+		Handler:   &mux,
+		TLSConfig: tlsConfig,
+	}
+
+	if tlsConfig != nil {
+		log.Print(srv.ListenAndServeTLS("", ""))
+	} else {
+		log.Print(srv.ListenAndServe())
+	}
 }
 
 func handlePolicyChanges(updates chan *policy) {
-	for {
+	for { // loop forever
 		select {
 		case e := <-updates:
 			if e.err != nil {
@@ -108,4 +131,41 @@ func handlePolicyChanges(updates chan *policy) {
 			}
 		}
 	}
+}
+
+// initTLS allows adding trusted certs to the platform truststore
+func initTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
+	var err error
+	var serverCert tls.Certificate
+	if serverCert, err = tls.LoadX509KeyPair(certFile, keyFile); err != nil {
+		return nil, err
+	}
+
+	var rootCAs *x509.CertPool
+	if rootCAs, err = x509.SystemCertPool(); err != nil {
+		return nil, err
+	}
+
+	if rootCAs == nil {
+		rootCAs = x509.NewCertPool()
+	}
+
+	if caFile != "" {
+		var caCerts []byte
+		caCerts, err = os.ReadFile(caFile)
+		if err != nil {
+			return nil, err
+		}
+
+		// Append our cert set to the system pool
+		if ok := rootCAs.AppendCertsFromPEM(caCerts); !ok {
+			log.Print("cacerts were not appended")
+		}
+	}
+
+	return &tls.Config{
+		RootCAs:      rootCAs,
+		Certificates: []tls.Certificate{serverCert}, // server cert
+		MinVersion:   tls.VersionTLS12,
+	}, nil
 }

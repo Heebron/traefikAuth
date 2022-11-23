@@ -7,12 +7,12 @@ import (
 	"net/url"
 )
 
-func myApp(w http.ResponseWriter, r *http.Request) {
+func requestHandler(w http.ResponseWriter, r *http.Request) {
 
 	proto, ok := r.Header["X-Forwarded-Proto"]
 
 	if !ok || proto[0] != "https" {
-		http.Error(w, "not a secure connection", http.StatusBadRequest)
+		http.Error(w, "not a TLS connection", http.StatusBadRequest)
 		return
 	}
 
