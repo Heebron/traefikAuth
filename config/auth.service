@@ -1,0 +1,9 @@
+[Unit]
+Description=Traefik PKI client cert whitelisting agent
+After=network.target
+
+[Service]
+ExecStart=/opt/auth/traefikAuth
+
+[Install]
+WantedBy=docker.service

@@ -1,0 +1,5 @@
+# file is processed in order
+# Ken & Marcy
+- o: '^Pratt$'
+  cn:
+    - 'Ken|Marcy Pratt'

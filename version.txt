@@ -1,0 +1,2 @@
+# this first line is ignored
+1.0.0
