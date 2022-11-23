@@ -56,38 +56,35 @@ func requestHandler(w http.ResponseWriter, r *http.Request) {
 	opsDenied.Inc()
 }
 
+func isInCidrSet(ipPort string) bool {
+	opsRequests.Inc()
+	ip := net2.ParseIP(ipPort[0:strings.Index(ipPort, ":")])
+	for _, i := range cidrSet {
+		if i.Contains(ip) {
+			return true
+		}
+	}
+	log.Printf("unauthorized source address %s", ip.String())
+	opsUnauthSource.Inc()
+	return false
+}
+
 func filterByCIDR_func(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		opsRequests.Inc()
-		ip := net2.ParseIP(r.RemoteAddr[0:strings.Index(r.RemoteAddr, ":")])
-
-		for _, i := range cidrSet {
-			if i.Contains(ip) {
-				next(w, r)
-				return
-			}
+		if isInCidrSet(r.RemoteAddr) {
+			next(w, r)
+			return
 		}
-
 		http.Error(w, "unauthorized - source IP not in configured CIDR", http.StatusUnauthorized)
-		log.Printf("unauthorized source address %s", ip.String())
-		opsUnauthSource.Inc()
 	}
 }
 
 func filterByCIDR_Handler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		opsRequests.Inc()
-		ip := net2.ParseIP(r.RemoteAddr[0:strings.Index(r.RemoteAddr, ":")])
-
-		for _, i := range cidrSet {
-			if i.Contains(ip) {
-				next.ServeHTTP(w, r)
-				return
-			}
+		if isInCidrSet(r.RemoteAddr) {
+			next.ServeHTTP(w, r)
+			return
 		}
-
 		http.Error(w, "unauthorized - source IP not in configured CIDR", http.StatusUnauthorized)
-		log.Printf("unauthorized source address %s", ip.String())
-		opsUnauthSource.Inc()
 	})
 }
