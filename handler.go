@@ -69,7 +69,7 @@ func isInCidrSet(ipPort string) bool {
 	return false
 }
 
-func filterByCIDR_func(next http.HandlerFunc) http.HandlerFunc {
+func filterByCIDRFunc(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if isInCidrSet(r.RemoteAddr) {
 			next(w, r)
@@ -79,7 +79,7 @@ func filterByCIDR_func(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func filterByCIDR_Handler(next http.Handler) http.Handler {
+func filterByCIDRHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isInCidrSet(r.RemoteAddr) {
 			next.ServeHTTP(w, r)

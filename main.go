@@ -100,8 +100,8 @@ func main() {
 	log.Printf("server is listening on '%s'", bindSpec)
 
 	mux := http.ServeMux{}
-	mux.HandleFunc("/", filterByCIDR_func(requestHandler))
-	mux.Handle("/metrics", filterByCIDR_Handler(promhttp.Handler()))
+	mux.HandleFunc("/", filterByCIDRFunc(requestHandler))
+	mux.Handle("/metrics", filterByCIDRHandler(promhttp.Handler()))
 
 	srv := &http.Server{
 		Addr:      bindSpec,
