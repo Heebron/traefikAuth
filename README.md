@@ -27,6 +27,8 @@ Usage of ./traefikAuth:
         upon which TCP/IP port to listen for traefik connections (default 7980)
   -policy string
         policyMap file (default "/home/kjpratt/.traefikForwardAuthPolicy.yaml")
+  -verbose
+        if set, logging is verbose
   -version
         show the version and quit
 ```

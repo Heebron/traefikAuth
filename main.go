@@ -63,7 +63,7 @@ func main() {
 	certFile := flag.String("certFile", "", "pem encoded file containing a X.509 server certificate")
 	keyFile := flag.String("keyFile", "", "pem encoded file containing an unencrypted X.509 certificate key")
 	caFile := flag.String("caFile", "", "pem encoded file containing X.509 trusted issuer certificates to add to platform truststore")
-	flag.BoolVar(&verbose, "verbose", false, "If set, logging is verbose")
+	flag.BoolVar(&verbose, "verbose", false, "if set, logging is verbose")
 	flag.Parse()
 
 	if *vFlag {
