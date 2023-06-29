@@ -54,25 +54,26 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 
 	}
 	m := extractor.FindStringSubmatch(unescaped)
-	// subgroup 1 is the 'CN' (common name)
-	// subgroup 2 is the 'O' (org)
 
-	if len(m) != 3 {
-		http.Error(w, "could not extract actor 'CN' and/or issuer 'O'", http.StatusBadRequest)
-		log.Printf("could not extract identity information from request %s", r.Host)
+	if len(m) != 5 {
+		http.Error(w, "could not extract subject 'CN' and/or issuer 'O'", http.StatusBadRequest)
+		log.Printf("could not extract identity information from '%s' provided by host %s", unescaped, r.Host)
 		return
+	}
+
+	// traefik sometimes reverses the Subject and Issuer
+	var cn, o string
+	if m[0][0] == 'S' {
+		cn = m[1]
+		o = m[2]
+	} else {
+		cn = m[4]
+		o = m[3]
 	}
 
 	// current policy is dynamically updated
-	if currentPolicy.isAuthorized(m[2], m[1]) {
+	if currentPolicy.isAuthorized(o, cn) {
 		return
-	}
-
-	if verbose {
-		log.Printf("escaped:%s", unescapedList[0])
-		log.Printf("unescaped:%s", unescaped)
-		log.Printf("CN:%s", m[1])
-		log.Printf("O:%s", m[2])
 	}
 
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
