@@ -45,6 +45,7 @@ var (
 	extractor     = regexp.MustCompile(`Subject="CN=(.*)";Issuer="O=(.*)"`)
 	currentPolicy *policy
 	cidrSet       []net2.IPNet
+	verbose       bool
 )
 
 // see https://doc.traefik.io/traefik/middlewares/http/forwardauth/
@@ -62,6 +63,7 @@ func main() {
 	certFile := flag.String("certFile", "", "pem encoded file containing a X.509 server certificate")
 	keyFile := flag.String("keyFile", "", "pem encoded file containing an unencrypted X.509 certificate key")
 	caFile := flag.String("caFile", "", "pem encoded file containing X.509 trusted issuer certificates to add to platform truststore")
+	flag.BoolVar(&verbose, "verbose", false, "If set, logging is verbose")
 	flag.Parse()
 
 	if *vFlag {
@@ -96,6 +98,9 @@ func main() {
 
 	// adjust cache size
 	*cacheSize = int(math.Min(53, math.Max(200000, float64(*cacheSize))))
+	if verbose {
+		log.Printf("cache size is %d", cacheSize)
+	}
 
 	// load policy
 	currentPolicy = processPolicyFile(*policyFile, *cacheSize)

@@ -68,6 +68,13 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if verbose {
+		log.Printf("escaped:%s", unescapedList[0])
+		log.Printf("unescaped:%s", unescaped)
+		log.Printf("CN:%s", m[1])
+		log.Printf("O:%s", m[2])
+	}
+
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
 }
 
