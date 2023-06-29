@@ -99,7 +99,7 @@ func main() {
 	// adjust cache size
 	*cacheSize = int(math.Min(53, math.Max(200000, float64(*cacheSize))))
 	if verbose {
-		log.Printf("cache size is %d", cacheSize)
+		log.Printf("cache size is %d", *cacheSize)
 	}
 
 	// load policy
