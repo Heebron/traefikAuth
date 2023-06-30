@@ -33,10 +33,6 @@ Usage of ./traefikAuth:
         show the version and quit
 ```
 
-The service also provides [Prometheus](https://prometheus.io/) metrics at the context /metrics. Make sure to add the
-CIDR for the clients
-that will be using the /metrics context.
-
 In order to use TLS, you must provide both the server cert *-certFile* and matching key *-keyFile* on the command
 line.
 
@@ -52,8 +48,7 @@ line.
 ```
 
 This policy file authorizes only those presenting client certificates with an O of 'Family' and a CN that matches
-'Fred Flintstone' or 'Wilma Flintstone' and targeting a service name that has a domain portion matching
-'flintstones.com'.
+'Fred Flintstone' or 'Wilma Flintstone'.
 
 ## Systemd
 
