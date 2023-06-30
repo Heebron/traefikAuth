@@ -41,7 +41,7 @@ import (
 var (
 	version       = "DEV"
 	buildStamp    = "DEV"
-	extractor     = regexp.MustCompile(`^Subject="CN=(.*)";Issuer="O=(.*)"|Issuer="O=(.*)";Subject="CN=(.*)"$`)
+	extractor     = regexp.MustCompile(`^Subject="CN=(.*?)";Issuer="O=(.*?)"|Issuer="O=(.*?)";Subject="CN=(.*?)"`)
 	currentPolicy *policy
 	cidrSet       []net2.IPNet
 )
