@@ -5,7 +5,8 @@ Provides a [traefik](https://github.com/traefik/traefik)
 service that implements access whitelisting based on client service host name, PKI certificate CN and O
 attributes.
 
-The policy file is monitored for changes. This allows one to update it without restarting the service.
+The policy file is monitored for changes. This allows one to update it without restarting the service. Additionally,
+the service can be forced to read its configuration file by sending it a SIGHUP signal.
 
 ## Command line
 
@@ -40,7 +41,8 @@ line.
 
 ```yaml
 # the Flintstones SOHO
-- o: '^Family|Friends$' # regexp match on organization
+- sni match: '.*' # regexp match on Host header 
+  o: '^Family|Friends$' # regexp match on organization
   cn:
     allow:
       - Fred Flintstone
@@ -48,7 +50,7 @@ line.
 ```
 
 This policy file authorizes only those presenting client certificates with an O of 'Family' and a CN that matches
-'Fred Flintstone' or 'Wilma Flintstone'.
+'Fred Flintstone' or 'Wilma Flintstone'. The match rule for the Host header, sni match, allows any host value.
 
 ## Systemd
 

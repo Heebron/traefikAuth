@@ -35,8 +35,9 @@ import (
 )
 
 type policyMap []struct {
-	O  string `yaml:"o"`
-	CN struct {
+	SniMatch string `yaml:"sni match"`
+	O        string `yaml:"o"`
+	CN       struct {
 		Allow struct {
 			Match []string `yaml:"match"`
 			Regex []string `yaml:"regex"`
@@ -49,6 +50,7 @@ type policyMap []struct {
 }
 
 type compEntry struct {
+	sniMatch   *regexp.Regexp
 	o          *regexp.Regexp
 	allowMatch []string
 	allowRegex []*regexp.Regexp
@@ -130,7 +132,7 @@ func compilePolicy(p policyMap) *policy {
 	newPolicy := &policy{}
 	h := sha1.New()
 
-	// loop through the list of DN organizations 'O'
+	// loop through the policy list
 	for i, value := range p {
 
 		// process direct match allow
@@ -141,13 +143,20 @@ func compilePolicy(p policyMap) *policy {
 		// TODO: implement deny and regexps
 
 		// we have something to allow or deny, include i in the policy map
+
+		sniCompiled, err := regexp.Compile(value.SniMatch)
+		if err != nil {
+			return &policy{err: errors.New(fmt.Sprintf("policy entry %d: sni match=%s could not be compiled: %s", i+1, value.SniMatch, err.Error()))}
+		}
+		h.Write([]byte(value.SniMatch))
+
 		oCompiled, err := regexp.Compile(value.O)
 		if err != nil {
 			return &policy{err: errors.New(fmt.Sprintf("policy entry %d: o=%s could not be compiled: %s", i+1, value.O, err.Error()))}
 		}
 		h.Write([]byte(value.O))
 
-		newEntry := compEntry{o: oCompiled, allowMatch: value.CN.Allow.Match}
+		newEntry := compEntry{sniMatch: sniCompiled, o: oCompiled, allowMatch: value.CN.Allow.Match}
 
 		h.Write([]byte(fmt.Sprintf("%v", value.CN))) // list out for hashing
 
@@ -159,8 +168,8 @@ func compilePolicy(p policyMap) *policy {
 }
 
 // isAuthorized return true if the individual is authorized else false.
-func (p *policy) isAuthorized(o, cn string) bool {
-	key := o + "|" + cn
+func (p *policy) isAuthorized(host, o, cn string) bool {
+	key := cn + "[" + o + "]" + host
 
 	isAllowed, exists := p.cache.Get(key) // concurrent safe
 
@@ -170,14 +179,14 @@ func (p *policy) isAuthorized(o, cn string) bool {
 
 	// run through policy looking for matches
 	for _, v := range p.comparators {
-		if v.o.MatchString(o) && slices.Contains(v.allowMatch, cn) {
+		if v.sniMatch.MatchString(host) && v.o.MatchString(o) && slices.Contains(v.allowMatch, cn) {
 			p.cache.Add(key, true) // concurrent safe
-			log.Printf("o=%s cn=%s added to allow cache", o, cn)
+			log.Printf("host=%s o=%s cn=%s added to allow cache", host, o, cn)
 			return true
 		}
 	}
 	p.cache.Add(key, false)
-	log.Printf("o=%s cn=%s added to deny cache", o, cn)
+	log.Printf("host=%s o=%s cn=%s added to deny cache", host, o, cn)
 
 	return false // finish
 }

@@ -1,6 +1,7 @@
 # file is processed in order
 # Ken & Marcy
-- o: '^Pratt$'
+- sni match: '.*' # matches everything
+  o: '^Pratt$'
   cn:
     allow:
       match:

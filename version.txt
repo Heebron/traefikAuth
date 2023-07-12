@@ -1,2 +1,7 @@
 # this first line is ignored
-0.8.5
+0.9.0
+
+Release Notes
+=============
+2023-07-12 0.9.0: added multi host support (SNI)
+

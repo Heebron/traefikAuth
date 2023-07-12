@@ -31,19 +31,25 @@ import (
 )
 
 func myApp(w http.ResponseWriter, r *http.Request) {
+	var ok bool
+	var err error
+	var proto, host, unescapedList []string
 
-	proto, ok := r.Header["X-Forwarded-Proto"]
-
-	// Is the connection to traefik a TLS/SSL connection?
-	if !ok || proto[0] != "https" {
+	// is the connection to traefik a TLS/SSL connection?
+	if proto, ok = r.Header["X-Forwarded-Proto"]; !ok || proto[0] != "https" {
 		http.Error(w, "not a secure connection", http.StatusBadRequest)
 		return
 	}
 
-	unescapedList, ok := r.Header["X-Forwarded-Tls-Client-Cert-Info"]
+	// need the host information for SNI matching
+	if host, ok = r.Header["X-Forwarded-Host"]; !ok || host[0] == "" {
+		http.Error(w, "missing the X-Forwarded-Host header", http.StatusBadRequest)
+		return
+	}
 
-	if !ok {
-		http.Error(w, "missing cert info", http.StatusBadRequest)
+	// we need the PKI cert info
+	if unescapedList, ok = r.Header["X-Forwarded-Tls-Client-Cert-Info"]; !ok {
+		http.Error(w, "missing the X-Forwarded-Tls-Client-Cert-Info header", http.StatusBadRequest)
 		return
 	}
 
@@ -73,7 +79,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// current policy is dynamically updated
-	if currentPolicy.isAuthorized(o, cn) {
+	if currentPolicy.isAuthorized(host[0], o, cn) {
 		return
 	}
 
