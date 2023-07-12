@@ -48,6 +48,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	unescaped, err := url.QueryUnescape(unescapedList[0])
+
 	if err != nil {
 		http.Error(w, fmt.Sprintf("could not decode identity information: %s", err.Error()), http.StatusBadRequest)
 		return
