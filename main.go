@@ -23,7 +23,9 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
+	"errors"
 	"flag"
 	"fmt"
 	"math"
@@ -35,6 +37,7 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"time"
 )
 
 var (
@@ -120,10 +123,33 @@ func main() {
 	srv := &http.Server{Addr: bindSpec, Handler: &mux, TLSConfig: tlsConfig}
 
 	// get'er going
-	if tlsConfig != nil {
-		fmt.Println(srv.ListenAndServeTLS("", ""))
+	go func() {
+		var err error
+		if tlsConfig != nil {
+			err = srv.ListenAndServeTLS("", "")
+		} else {
+			err = srv.ListenAndServe()
+		}
+
+		if !errors.Is(err, http.ErrServerClosed) {
+			fmt.Printf("error %v while shutting down HTTP server\n", err)
+		} else {
+			fmt.Println("stopped serving new connections")
+		}
+	}()
+
+	// register shutdown signal handler
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan // block here until signal is received
+
+	shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownRelease()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		fmt.Printf("HTTP shutdown error: %v\n", err)
 	} else {
-		fmt.Println(srv.ListenAndServe())
+		fmt.Printf("graceful shutdown complete")
 	}
 }
 
