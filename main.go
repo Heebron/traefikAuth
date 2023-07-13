@@ -115,7 +115,7 @@ func main() {
 
 	// set up routes
 	mux := http.ServeMux{}
-	mux.Handle("/", cidrFilter(http.HandlerFunc(myApp)))
+	mux.Handle("/", cidrFilter(http.HandlerFunc(myApp))) // only allow connections from particular IP address range
 
 	// set up server
 	srv := &http.Server{Addr: bindSpec, Handler: &mux, TLSConfig: tlsConfig}
@@ -137,7 +137,9 @@ func insertNewPolicy(updates chan *policy) {
 		} else {
 			if bytes.Compare(e.hash, currentPolicy.hash) != 0 {
 				currentPolicy = e
-				log.Print("new policy received and cache flushed")
+				log.Print("policy updated and cache flushed")
+			} else {
+				log.Print("policy unchanged")
 			}
 		}
 	}

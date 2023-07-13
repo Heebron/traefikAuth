@@ -34,6 +34,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	var ok bool
 	var err error
 	var proto, host, unescapedList []string
+	var unescaped string
 
 	// is the connection to traefik a TLS/SSL connection?
 	if proto, ok = r.Header["X-Forwarded-Proto"]; !ok || proto[0] != "https" {
@@ -48,18 +49,18 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// we need the PKI cert info
-	if unescapedList, ok = r.Header["X-Forwarded-Tls-Client-Cert-Info"]; !ok {
+	if unescapedList, ok = r.Header["X-Forwarded-Tls-Client-Cert-Info"]; !ok || unescapedList[0] == "" {
 		http.Error(w, "missing the X-Forwarded-Tls-Client-Cert-Info header", http.StatusBadRequest)
 		return
 	}
 
-	unescaped, err := url.QueryUnescape(unescapedList[0])
-
-	if err != nil {
+	// replace escape sequences with what they represent
+	if unescaped, err = url.QueryUnescape(unescapedList[0]); err != nil {
 		http.Error(w, fmt.Sprintf("could not decode identity information: %s", err.Error()), http.StatusBadRequest)
 		return
-
 	}
+
+	// grab DN attributes
 	m := extractor.FindStringSubmatch(unescaped)
 
 	if len(m) != 5 {
@@ -70,12 +71,10 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 
 	// traefik sometimes reverses the Subject and Issuer
 	var cn, o string
-	if m[0][0] == 'S' {
-		cn = m[1]
-		o = m[2]
+	if m[0][0] == 'S' { // S is for "Subject"
+		cn, o = m[1], m[2]
 	} else {
-		cn = m[4]
-		o = m[3]
+		cn, o = m[4], m[3]
 	}
 
 	// current policy is dynamically updated
