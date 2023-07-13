@@ -26,7 +26,6 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"log"
 	"math"
 	net2 "net"
 	"net/http"
@@ -68,14 +67,14 @@ func main() {
 		return
 	}
 
-	log.Printf("traefik PKI forwardAuth service")
-	log.Printf("version %s", version)
-	log.Printf("date built %s", buildStamp)
+	fmt.Println("traefik PKI forwardAuth service")
+	fmt.Printf("version %s\n", version)
+	fmt.Printf("date built %s\n", buildStamp)
 
 	var tlsConfig *tls.Config
 	if *keyFile != "" && *certFile != "" {
 		if tlsConfig, err = initTLS(*certFile, *keyFile, *caFile); err != nil {
-			log.Printf("could not set up TLS: %s", err.Error())
+			fmt.Printf("could not set up TLS: %s\n", err.Error())
 			return
 		}
 	}
@@ -85,7 +84,7 @@ func main() {
 		list := strings.Split(*cidrsFlag, ",")
 		for _, i := range list {
 			if _, cidr, err := net2.ParseCIDR(i); err != nil {
-				log.Printf("can't process CIDR '%s: %s", i, err.Error())
+				fmt.Printf("can't process CIDR '%s: %s\n", i, err.Error())
 				return
 			} else {
 				cidrSet = append(cidrSet, *cidr)
@@ -99,7 +98,7 @@ func main() {
 	// load policy
 	currentPolicy = processPolicyFile(*policyFile, *cacheSize)
 	if currentPolicy.err != nil {
-		log.Printf("can't process policy file '%s: %s", *policyFile, currentPolicy.err.Error())
+		fmt.Printf("can't process policy file '%s: %s\n", *policyFile, currentPolicy.err.Error())
 		return
 	}
 
@@ -111,7 +110,7 @@ func main() {
 
 	// Start server on port specified above
 	bindSpec := fmt.Sprintf("%s:%d", *bindAddr, *listenPort)
-	log.Printf("server is listening on '%s'", bindSpec)
+	fmt.Printf("server is listening on %s\n", bindSpec)
 
 	// set up routes
 	mux := http.ServeMux{}
@@ -122,9 +121,9 @@ func main() {
 
 	// get'er going
 	if tlsConfig != nil {
-		log.Print(srv.ListenAndServeTLS("", ""))
+		fmt.Println(srv.ListenAndServeTLS("", ""))
 	} else {
-		log.Print(srv.ListenAndServe())
+		fmt.Println(srv.ListenAndServe())
 	}
 }
 
@@ -133,13 +132,13 @@ func insertNewPolicy(updates chan *policy) {
 	for {
 		e := <-updates // wait for change
 		if e.err != nil {
-			log.Printf("can't update policy: %s", e.err.Error())
+			fmt.Printf("can't update policy: %s\n", e.err.Error())
 		} else {
 			if bytes.Compare(e.hash, currentPolicy.hash) != 0 {
 				currentPolicy = e
-				log.Print("policy updated and cache flushed")
+				fmt.Println("policy updated and cache flushed")
 			} else {
-				log.Print("policy unchanged")
+				fmt.Println("policy unchanged")
 			}
 		}
 	}
@@ -151,7 +150,7 @@ func signalWatcher(f string, cacheSize int, updates chan *policy) {
 	signal.Notify(sig, syscall.SIGUSR1) // SIGUSR1
 	for {
 		<-sig // wait for it
-		log.Println("SIGUSR1 received")
+		fmt.Println("SIGUSR1 received")
 		updates <- processPolicyFile(f, cacheSize)
 	}
 }

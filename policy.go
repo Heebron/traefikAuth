@@ -29,7 +29,6 @@ import (
 	lru2 "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/exp/slices"
 	"gopkg.in/yaml.v3"
-	"log"
 	"os"
 	"regexp"
 )
@@ -82,7 +81,7 @@ func policyFileWatcher(f string, cacheSize int, c chan<- *policy) {
 	}
 
 	// all set
-	log.Printf("watching policy file '%s' for changes", f)
+	fmt.Printf("watching policy file '%s' for changes\n", f)
 	for {
 		select {
 		case e := <-watcher.Events: // wait for file event.
@@ -181,12 +180,12 @@ func (p *policy) isAuthorized(host, o, cn string) bool {
 	for _, v := range p.comparators {
 		if v.sniMatch.MatchString(host) && v.o.MatchString(o) && slices.Contains(v.allowMatch, cn) {
 			p.cache.Add(key, true) // concurrent safe
-			log.Printf("host=%s o=%s cn=%s added to allow cache", host, o, cn)
+			fmt.Printf("host=%s o=%s cn=%s added to allow cache\n", host, o, cn)
 			return true
 		}
 	}
 	p.cache.Add(key, false)
-	log.Printf("host=%s o=%s cn=%s added to deny cache", host, o, cn)
+	fmt.Printf("host=%s o=%s cn=%s added to deny cache\n", host, o, cn)
 
 	return false // finish
 }

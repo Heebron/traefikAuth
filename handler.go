@@ -23,7 +23,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	net2 "net"
 	"net/http"
 	"net/url"
@@ -65,7 +64,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 
 	if len(m) != 5 {
 		http.Error(w, "could not extract subject 'CN' and/or issuer 'O'", http.StatusBadRequest)
-		log.Printf("could not extract identity information from '%s' provided by host %s", unescaped, r.Host)
+		fmt.Printf("could not extract identity information from '%s' provided by host %s\n", unescaped, r.Host)
 		return
 	}
 
@@ -92,7 +91,7 @@ func isInCidrSet(ipPort string) bool {
 			return true
 		}
 	}
-	log.Printf("unauthorized source address %s", ip.String())
+	fmt.Printf("unauthorized source address %s\n", ip.String())
 	return false
 }
 
