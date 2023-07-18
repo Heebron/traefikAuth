@@ -78,7 +78,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-ProxiedEntitiesChain", "")
 		w.Header().Add("X-ProxiedIssuersChain", "")
 
-		return
+		return // all is well
 	}
 
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
