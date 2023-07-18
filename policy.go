@@ -25,6 +25,7 @@ import (
 	"crypto/sha1"
 	"errors"
 	"fmt"
+	"github.com/Heebron/set"
 	"github.com/fsnotify/fsnotify"
 	lru2 "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/exp/slices"
@@ -33,41 +34,41 @@ import (
 	"regexp"
 )
 
-type policyMap []struct {
-	SniMatch string `yaml:"sni match"`
-	O        string `yaml:"o"`
-	CN       struct {
-		Allow struct {
-			Match []string `yaml:"match"`
-			Regex []string `yaml:"regex"`
-		} `yaml:"allow"`
-		Deny struct {
-			Match []string `yaml:"match"`
-			Regex []string `yaml:"regex"`
-		} `yaml:"deny"`
-	} `yaml:"cn"`
+type policyFile struct {
+	RevList []string `yaml:"revocation list"`
+	Hosts   []struct {
+		SniMatch string `yaml:"sni match"`
+		O        string `yaml:"o"`
+		CN       struct {
+			Allow struct {
+				Match []string `yaml:"match"`
+			} `yaml:"allow"`
+			Deny struct {
+				Match []string `yaml:"match"`
+			} `yaml:"deny"`
+		} `yaml:"cn"`
+	} `yaml:"hosts"`
 }
 
 type compEntry struct {
 	sniMatch   *regexp.Regexp
 	o          *regexp.Regexp
 	allowMatch []string
-	allowRegex []*regexp.Regexp
 	denyMatch  []string
-	denyRegex  []*regexp.Regexp
 }
 
 type policy struct {
-	err   error // carry any errors processing a policy file
-	cache *lru2.Cache[string, bool]
-	hash  []byte
+	err            error // carry any errors processing a policy file
+	cache          *lru2.Cache[string, bool]
+	hash           []byte
+	revocationList set.Set[string] // set of revoked certificate serial numbers
 
 	// compiled regex
 	comparators []compEntry
 }
 
 func policyFileWatcher(f string, cacheSize int, c chan<- *policy) {
-	// set up the policyMap file watcher
+	// set up the policyFile file watcher
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		c <- &policy{err: err}
@@ -110,29 +111,35 @@ func processPolicyFile(f string, cacheSize int) *policy {
 	}
 }
 
-func loadPolicy(f string) (policyMap, error) {
+func loadPolicy(f string) (policyFile, error) {
 	confFile, err := os.Open(f)
 	if err != nil {
-		return policyMap{}, err
+		return policyFile{}, err
 	}
 	defer func() { _ = confFile.Close() }()
 
 	decoder := yaml.NewDecoder(confFile)
-	newPolicy := policyMap{}
+	newPolicy := policyFile{}
 	err = decoder.Decode(&newPolicy)
 	if err != nil {
-		return nil, err
+		return policyFile{}, err
 	}
 
 	return newPolicy, nil
 }
 
-func compilePolicy(p policyMap) *policy {
+func compilePolicy(p policyFile) *policy {
 	newPolicy := &policy{}
 	h := sha1.New()
 
+	// loop through the revocation list
+	for _, value := range p.RevList {
+		newPolicy.revocationList.Add(value)
+		h.Sum([]byte(value))
+	}
+
 	// loop through the policy list
-	for i, value := range p {
+	for i, value := range p.Hosts {
 
 		// process direct match allow
 		if len(value.CN.Allow.Match) == 0 {
@@ -167,13 +174,22 @@ func compilePolicy(p policyMap) *policy {
 }
 
 // isAuthorized return true if the individual is authorized else false.
-func (p *policy) isAuthorized(host, o, cn string) bool {
+func (p *policy) isAuthorized(host, o, cn, serial string) bool {
+
 	key := cn + "[" + o + "]" + host
 
 	isAllowed, exists := p.cache.Get(key) // concurrent safe
 
 	if exists { // already in cache
 		return isAllowed
+	}
+
+	// todo: update traefik config to include serial
+	// check for revoked cert
+	if serial != "" && p.revocationList.Contains(serial) {
+		fmt.Printf("host=%s o=%s cn=%s added to deny cache - revoked cert\n", host, o, cn)
+		p.cache.Add(key, false)
+		return false
 	}
 
 	// run through policy looking for matches

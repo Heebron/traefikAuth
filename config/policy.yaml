@@ -1,9 +1,11 @@
 # file is processed in order
 # Ken & Marcy
-- sni match: '.*' # matches everything
-  o: '^Pratt$'
-  cn:
-    allow:
-      match:
-      - 'Ken Pratt'
-      - 'Marcy Pratt'
+revocation list:
+hosts:
+  - sni match: '.*' # matches everything
+    o: '^Pratt$'
+    cn:
+      allow:
+        match:
+        - 'Ken Pratt'
+        - 'Marcy Pratt'

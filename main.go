@@ -54,7 +54,7 @@ func main() {
 	var err error
 
 	policyFile := flag.String("policy", path.Join(os.Getenv("HOME"), ".traefikForwardAuthPolicy.yaml"),
-		"policyMap file")
+		"policyFile file")
 	vFlag := flag.Bool("version", false, "show the version and quit")
 	cacheSize := flag.Int("cacheSize", 53, "identity decision working set size")
 	listenPort := flag.Int("listenPort", 7980, "upon which TCP/IP port to listen for traefik connections")
