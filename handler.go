@@ -22,6 +22,8 @@ SOFTWARE.
 package main
 
 import (
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	net2 "net"
 	"net/http"
@@ -32,7 +34,7 @@ import (
 func myApp(w http.ResponseWriter, r *http.Request) {
 	var ok bool
 	var err error
-	var proto, host, unescapedList []string
+	var proto, pemData, host, unescapedList []string
 	var unescaped string
 
 	// is the connection to traefik a TLS/SSL connection?
@@ -47,7 +49,22 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// we need the PKI cert info
+	if pemData, ok = r.Header["X-Forwarded-Tls-Client-Cert"]; !ok || pemData[0] == "" {
+		fmt.Println("No PEM")
+	} else {
+		block, _ := pem.Decode([]byte(pemData[0]))
+		if block != nil {
+			fmt.Println(block.Type)
+			certs, err := x509.ParseCertificates(block.Bytes)
+			if err == nil {
+				for i, v := range certs {
+					fmt.Printf("%d: issuer %s subject %s (CN=%s, O=%s)", i, v.Issuer.String(), v.Subject.String(), v.Subject.CommonName, v.Issuer.Organization)
+				}
+			}
+		}
+	}
+
+	// we need the PKI pemData info
 	if unescapedList, ok = r.Header["X-Forwarded-Tls-Client-Cert-Info"]; !ok || unescapedList[0] == "" {
 		http.Error(w, "missing the X-Forwarded-Tls-Client-Cert-Info header", http.StatusBadRequest)
 		return
@@ -78,6 +95,15 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 
 	// current policy is dynamically updated
 	if currentPolicy.isAuthorized(host[0], o, cn) {
+		w.Header().Add("X-Client-Verify", "SUCCESS")
+		w.Header().Add("X-Client-DN", "")
+		w.Header().Add("X-Issuer-DN", "")
+		w.Header().Add("X-Forwarded-Proto", "https")
+
+		// todo: implement trusted assertion - in the mean time, strip the headers
+		w.Header().Add("X-ProxiedEntitiesChain", "")
+		w.Header().Add("X-ProxiedIssuersChain", "")
+
 		return
 	}
 
