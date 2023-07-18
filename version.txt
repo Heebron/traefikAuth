@@ -1,10 +1,15 @@
 # this first line is ignored
-0.9.4
+0.9.5
 
 Release Notes
 =============
-2023-07-12 0.9.0: added multi host support (SNI)
-2023-07-13 0.9.1: added more logging and more checks on traefik provided header set
-2023-07-13 0.9.2: updated command line documentation to match implementation
-2023-07-13 0.9.3: converted log output to simple print output - works better with systemd logging
+2023-07-18 0.9.5: utilizing the entire cert (from traefik header) to provide TLS offload headers
+                  X-Client-Verify: SUCCESS
+                  X-Client-Subject: CN=Ken Pratt,L=Gainesville,ST=Virginia,C=US
+                  X-Issuer-Issuer: CN=pratt-ca,O=Pratt,L=Gainesville,ST=Virginia,C=US
+                  X-Forwarded-Proto: https
 2023-07-13 0.9.4: added graceful shutdown processing
+2023-07-13 0.9.3: converted log output to simple print output - works better with systemd logging
+2023-07-13 0.9.2: updated command line documentation to match implementation
+2023-07-13 0.9.1: added more logging and more checks on traefik provided header set
+2023-07-12 0.9.0: added multi host support (SNI)
