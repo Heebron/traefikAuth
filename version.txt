@@ -1,8 +1,9 @@
 # this first line is ignored
-0.9.5
+0.9.6
 
 Release Notes
 =============
+2023-07-19 0.9.6: process only the first cert in the provided traefic header
 2023-07-18 0.9.5: utilizing the entire cert (from traefik header) to provide TLS offload headers
                   X-Client-Verify: SUCCESS
                   X-Client-Subject: CN=Ken Pratt,L=Gainesville,ST=Virginia,C=US
