@@ -22,18 +22,20 @@ SOFTWARE.
 package main
 
 import (
+	"crypto/x509"
+	"encoding/base64"
 	"fmt"
 	net2 "net"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
 func myApp(w http.ResponseWriter, r *http.Request) {
 	var ok bool
+	var proto, pemData, host []string
+	var cert *x509.Certificate
 	var err error
-	var proto, host, unescapedList []string
-	var unescaped string
+	var der []byte
 
 	// is the connection to traefik a TLS/SSL connection?
 	if proto, ok = r.Header["X-Forwarded-Proto"]; !ok || proto[0] != "https" {
@@ -47,38 +49,36 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// we need the PKI cert info
-	if unescapedList, ok = r.Header["X-Forwarded-Tls-Client-Cert-Info"]; !ok || unescapedList[0] == "" {
-		http.Error(w, "missing the X-Forwarded-Tls-Client-Cert-Info header", http.StatusBadRequest)
+	// grab the cert (PEM format)
+	if pemData, ok = r.Header["X-Forwarded-Tls-Client-Cert"]; !ok || pemData[0] == "" {
+		http.Error(w, "no certificate in the X-Forwarded-Tls-Client-Cert header", http.StatusBadRequest)
 		return
 	}
 
-	// replace escape sequences with what they represent
-	if unescaped, err = url.QueryUnescape(unescapedList[0]); err != nil {
-		http.Error(w, fmt.Sprintf("could not decode identity information: %s", err.Error()), http.StatusBadRequest)
+	// decode the cert (base64)
+	if der, err = base64.StdEncoding.DecodeString(pemData[0]); err != nil {
+		http.Error(w, "could not decode PEM data", http.StatusBadRequest)
 		return
 	}
 
-	// grab DN attributes
-	m := extractor.FindStringSubmatch(unescaped)
-
-	if len(m) != 5 {
-		http.Error(w, "could not extract subject 'CN' and/or issuer 'O'", http.StatusBadRequest)
-		fmt.Printf("could not extract identity information from '%s' provided by host %s\n", unescaped, r.Host)
+	// parse the cert data
+	if cert, err = x509.ParseCertificate(der); err != nil {
+		http.Error(w, "could not parse certificate", http.StatusBadRequest)
 		return
 	}
 
-	// traefik sometimes reverses the Subject and Issuer
-	var cn, o string
-	if m[0][0] == 'S' { // S is for "Subject"
-		cn, o = m[1], m[2]
-	} else {
-		cn, o = m[4], m[3]
-	}
+	// if authorized, provide TLS offload headers (there is no standard header set for this)
+	if currentPolicy.isAuthorized(host[0], cert.Issuer.Organization[0], cert.Subject.CommonName) {
+		w.Header().Add("X-Client-Verify", "SUCCESS") // can't get here if TLS handshake fails between client and traefik
+		w.Header().Add("X-Client-Subject", cert.Subject.ToRDNSequence().String())
+		w.Header().Add("X-Issuer-Issuer", cert.Issuer.ToRDNSequence().String())
+		w.Header().Add("X-Forwarded-Proto", "https")
 
-	// current policy is dynamically updated
-	if currentPolicy.isAuthorized(host[0], o, cn) {
-		return
+		// todo: implement trusted assertion - in the mean time, strip the headers
+		w.Header().Add("X-ProxiedEntitiesChain", "")
+		w.Header().Add("X-ProxiedIssuersChain", "")
+
+		return // all is well
 	}
 
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
