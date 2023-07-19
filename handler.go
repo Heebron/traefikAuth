@@ -27,6 +27,7 @@ import (
 	"fmt"
 	net2 "net"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -55,15 +56,21 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// remove all but first cert
+	pemData[0], _, _ = strings.Cut(pemData[0], ",")
+
 	// decode the cert (base64)
 	if der, err = base64.StdEncoding.DecodeString(pemData[0]); err != nil {
 		http.Error(w, "could not decode PEM data", http.StatusBadRequest)
+		_, _ = fmt.Fprintf(os.Stderr, "could not decode PEM data, '%s' from %s\n", err.Error(), r.Host)
+		_, _ = fmt.Fprintln(os.Stderr, pemData[0])
 		return
 	}
 
 	// parse the cert data
 	if cert, err = x509.ParseCertificate(der); err != nil {
 		http.Error(w, "could not parse certificate", http.StatusBadRequest)
+		_, _ = fmt.Fprintf(os.Stderr, "could not parse certificate, '%s' from %s\n", err.Error(), r.Host)
 		return
 	}
 
