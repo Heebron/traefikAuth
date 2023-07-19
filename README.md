@@ -77,11 +77,15 @@ Here is an example that controls access to a [Portainer](https://www.portainer.i
 
 ```yaml
 labels:
+  - "traefik.enable=true"
+  - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+  - "traefik.http.routers.portainer.rule=Host(`portainer.thepratts.info`)"
+  - "traefik.http.routers.portainer.entrypoints=websecure"
+  - "traefik.http.routers.portainer.service=portainer"
   - "traefik.http.routers.portainer.middlewares=pkiwhitelist"
   - "traefik.http.routers.portainer.tls=true"
   - "traefik.http.routers.portainer.tls.options=certRequired@file"
   - "traefik.http.middlewares.authserver.forwardauth.address=http://192.168.10.99:7980"
-  - "traefik.http.middlewares.passCertInfo.passtlsclientcert.info.subject.commonName=true"
-  - "traefik.http.middlewares.passCertInfo.passtlsclientcert.info.issuer.organization=true"
+  - "traefik.http.middlewares.passCertInfo.passtlsclientcert.pem=true"
   - "traefik.http.middlewares.pkiwhitelist.chain.middlewares=passCertInfo,authserver"
 ```
