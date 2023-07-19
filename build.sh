@@ -27,5 +27,5 @@ echo VERSION = ${VERSION}
 echo DATE = ${DATE}
 
 go vet .
-go build -o dist/traefikAuth \
+CGO_ENABLED=0 go build -v -o dist/traefikAuth \
   -ldflags "-X \"main.buildStamp=${DATE}\" -X main.version=${VERSION} -s -w" .
