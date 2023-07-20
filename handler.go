@@ -78,7 +78,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	if currentPolicy.isAuthorized(host[0], cert.Issuer.Organization[0], cert.Subject.CommonName) {
 		w.Header().Add("X-Client-Verify", "SUCCESS") // can't get here if TLS handshake fails between client and traefik
 		w.Header().Add("X-Client-Subject", cert.Subject.ToRDNSequence().String())
-		w.Header().Add("X-Issuer-Issuer", cert.Issuer.ToRDNSequence().String())
+		w.Header().Add("X-Client-Issuer", cert.Issuer.ToRDNSequence().String())
 		w.Header().Add("X-Forwarded-Proto", "https")
 
 		// todo: implement trusted assertion - in the mean time, strip the headers
