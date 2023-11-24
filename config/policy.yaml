@@ -1,9 +1,9 @@
 # file is processed in order
-# Ken & Marcy
-- sni match: '.*' # matches everything
-  o: '^Pratt$'
+# Fred & Wilma but not Bambam...
+- sni match: '.*' # matches everything (all hostnames)
+  o: '^Flintstone$'
   cn:
     allow:
       match:
-      - 'Ken Pratt'
-      - 'Marcy Pratt'
+      - 'Fred Flintstone'
+      - 'Wilma Flintstone'
