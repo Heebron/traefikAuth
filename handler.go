@@ -92,7 +92,12 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func isInCidrSet(ipPort string) bool {
-	ip := net2.ParseIP(ipPort[0:strings.Index(ipPort, ":")])
+	lastColon := strings.LastIndex(ipPort, ":")
+	ipPart := ipPort[0:lastColon]
+	if ipPart[0] == '[' { // IPv6
+		ipPart = ipPort[1 : len(ipPart)-1]
+	}
+	ip := net2.ParseIP(ipPart)
 	for _, i := range cidrSet {
 		if i.Contains(ip) {
 			return true

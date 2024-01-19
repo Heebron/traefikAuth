@@ -57,7 +57,7 @@ func main() {
 	cacheSize := flag.Int("cacheSize", 53, "identity decision working set size")
 	listenPort := flag.Int("listenPort", 7980, "upon which TCP/IP port to listen for traefik connections")
 	bindAddr := flag.String("bindAddr", "0.0.0.0", "which network device to bind")
-	cidrsFlag := flag.String("cidrs", "", "incoming connections must come from within this list of comma separated CIDRs")
+	cidrsFlag := flag.String("cidrs", "127.0.0.0/24,::1/128", "incoming connections must come from within this list of comma separated CIDRs")
 	certFile := flag.String("certFile", "", "pem encoded file containing a X.509 server certificate")
 	keyFile := flag.String("keyFile", "", "pem encoded file containing an unencrypted X.509 certificate key")
 	caFile := flag.String("caFile", "", "pem encoded file containing X.509 trusted issuer certificates to add to platform truststore")
@@ -81,15 +81,14 @@ func main() {
 	}
 
 	// set up CIDR filter
-	if *cidrsFlag != "" {
-		list := strings.Split(*cidrsFlag, ",")
-		for _, i := range list {
-			if _, cidr, err := net2.ParseCIDR(i); err != nil {
-				fmt.Printf("can't process CIDR '%s: %s\n", i, err.Error())
-				return
-			} else {
-				cidrSet = append(cidrSet, *cidr)
-			}
+	list := strings.Split(*cidrsFlag, ",")
+	for _, i := range list {
+		if _, cidr, err := net2.ParseCIDR(i); err != nil {
+			fmt.Printf("can't process CIDR '%s: %s\n", i, err.Error())
+			return
+		} else {
+			cidrSet = append(cidrSet, *cidr)
+			fmt.Printf("CIDR %s added\n", i)
 		}
 	}
 
