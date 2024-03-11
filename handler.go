@@ -38,7 +38,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var der []byte
 
-	// Is the connection to traefik a TLS/SSL connection?
+	// Is the connection to traefik a TLS connection?
 	if proto, ok = r.Header["X-Forwarded-Proto"]; !ok || proto[0] != "https" {
 		http.Error(w, "not a secure connection", http.StatusBadRequest)
 		return
@@ -71,7 +71,6 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	if der, err = base64.StdEncoding.DecodeString(pemData[0]); err != nil {
 		http.Error(w, "could not decode PEM data", http.StatusBadRequest)
 		_, _ = fmt.Fprintf(os.Stderr, "could not decode PEM data, '%s' from %s\n", err.Error(), r.Host)
-		//_, _ = fmt.Fprintln(os.Stderr, pemData[0])
 		return
 	}
 
