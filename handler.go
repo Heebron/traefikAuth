@@ -38,28 +38,36 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	var err error
 	var der []byte
 
-	// is the connection to traefik a TLS/SSL connection?
+	// Is the connection to traefik a TLS/SSL connection?
 	if proto, ok = r.Header["X-Forwarded-Proto"]; !ok || proto[0] != "https" {
 		http.Error(w, "not a secure connection", http.StatusBadRequest)
 		return
 	}
 
-	// need the host information for SNI matching
+	// We need the host information for SNI matching.
 	if host, ok = r.Header["X-Forwarded-Host"]; !ok || host[0] == "" {
 		http.Error(w, "missing the X-Forwarded-Host header", http.StatusBadRequest)
 		return
 	}
 
-	// grab the cert (PEM format)
+	// Grab the cert (PEM format).
 	if pemData, ok = r.Header["X-Forwarded-Tls-Client-Cert"]; !ok || pemData[0] == "" {
+		// If we don't have a client certificate, check the URI and see if it is whitelisted.
+
+		// debug
+		if uri, ok := r.Header["X-Forwarded-Uri"]; ok {
+			_, _ = fmt.Fprintln(os.Stderr, "uri = ", uri[0])
+		}
+		// end debug
+
 		http.Error(w, "no certificate in the X-Forwarded-Tls-Client-Cert header", http.StatusBadRequest)
 		return
 	}
 
-	// remove all but first cert
+	// Remove all but first cert.
 	pemData[0], _, _ = strings.Cut(pemData[0], ",")
 
-	// decode the cert (base64)
+	// Decode the cert (base64).
 	if der, err = base64.StdEncoding.DecodeString(pemData[0]); err != nil {
 		http.Error(w, "could not decode PEM data", http.StatusBadRequest)
 		_, _ = fmt.Fprintf(os.Stderr, "could not decode PEM data, '%s' from %s\n", err.Error(), r.Host)
@@ -67,14 +75,14 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// parse the cert data
+	// Parse the cert data.
 	if cert, err = x509.ParseCertificate(der); err != nil {
 		http.Error(w, "could not parse certificate", http.StatusBadRequest)
 		_, _ = fmt.Fprintf(os.Stderr, "could not parse certificate, '%s' from %s\n", err.Error(), r.Host)
 		return
 	}
 
-	// if authorized, provide TLS offload headers (there is no standard header set for this)
+	// If authorized, provide TLS offload headers (there is no official standard header set for this).
 	if currentPolicy.isAuthorized(host[0], cert.Issuer.Organization[0], cert.Subject.CommonName) {
 		w.Header().Add("X-Client-Verify", "SUCCESS") // can't get here if TLS handshake fails between client and traefik
 		w.Header().Add("X-Client-Subject", cert.Subject.ToRDNSequence().String())
@@ -85,7 +93,7 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("X-ProxiedEntitiesChain", "")
 		w.Header().Add("X-ProxiedIssuersChain", "")
 
-		return // all is well
+		return // All is well.
 	}
 
 	http.Error(w, "unauthorized", http.StatusUnauthorized)
