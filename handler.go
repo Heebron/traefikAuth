@@ -54,10 +54,10 @@ func myApp(w http.ResponseWriter, r *http.Request) {
 	if pemData, ok = r.Header["X-Forwarded-Tls-Client-Cert"]; !ok || pemData[0] == "" {
 		// If we don't have a client certificate, check the URI and see if it is whitelisted.
 
-		// debug
-		if uri, ok := r.Header["X-Forwarded-Uri"]; ok {
-			_, _ = fmt.Fprintln(os.Stderr, "uri = ", uri[0])
-		}
+		// debug - planning on supporting X-Forwarded-Uri
+		//if uri, ok := r.Header["X-Forwarded-Uri"]; ok {
+		//	_, _ = fmt.Fprintln(os.Stderr, "uri = ", uri[0])
+		//}
 		// end debug
 
 		http.Error(w, "no certificate in the X-Forwarded-Tls-Client-Cert header", http.StatusBadRequest)
